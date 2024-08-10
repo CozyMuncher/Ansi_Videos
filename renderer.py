@@ -20,10 +20,10 @@ def render_image(img_string, frame_rate):
     _time = time.time()
     sys.stdout.write("\033[H")
     sys.stdout.write("\r" + img_string)
-    sys.stdout.flush
+    sys.stdout.flush()
 
-    while time.time() - _time < (1 / frame_rate):
-        pass
+    if time.time() - _time < (1 / frame_rate):
+        time.sleep((1 / frame_rate) - (time.time() - _time))
 
 
 def resize_image(frame, width, height):
@@ -47,30 +47,35 @@ def loading_screen():
 
 
 def main(vid_path):
-    global finish_loading
-    finish_loading = threading.Event()
+    try:
+        global finish_loading
+        finish_loading = threading.Event()
 
-    get_frame_thread = threading.Thread(target=get_frames, args=(vid_path,))
-    loading_animation_thread = threading.Thread(target=loading_screen)
+        get_frame_thread = threading.Thread(target=lambda: get_frames(vid_path))
+        loading_animation_thread = threading.Thread(target=loading_screen)
 
-    get_frame_thread.start()
-    loading_animation_thread.start()
+        get_frame_thread.start()
+        loading_animation_thread.start()
 
-    get_frame_thread.join()
-    loading_animation_thread.join()
+        get_frame_thread.join()
+        loading_animation_thread.join()
 
-    global vr
-    frame_rate = vr.get_avg_fps()
+        global vr
+        frame_rate = vr.get_avg_fps()
 
-    width, height = get_terminal_size()
+        width, height = get_terminal_size()
 
-    for frame in range(vr._num_frame + 1):
-        render_image(
-            build_image(resize_image(vr[frame].asnumpy(), width, height - 1)),
-            frame_rate,
-        )
+        for frame in range(vr._num_frame):
+            render_image(
+                build_image(resize_image(vr[frame].asnumpy(), width, height - 1)),
+                frame_rate,
+            )
 
-    print(" ----- End ----- ")
+        print(" ----- End ----- ")
+    except Exception as e:
+        clear()
+        print("\x1b[0m\n")
+        print(e)
 
 
 if __name__ == "__main__":
