@@ -1,8 +1,6 @@
-import cv2, sys, time, os, json, concurrent.futures
-import numpy as np
-from itertools import repeat
+import cv2, sys, time, os, threading
 from os import get_terminal_size
-
+from decord import VideoReader
 
 clear = lambda: os.system("clear")
 
@@ -18,55 +16,65 @@ def build_image(image):
     return img_string
 
 
-def get_image(image_id, config, width, height):
-    image = cv2.imread(f"{config['frames_location']}/frame{image_id}.jpg")
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = cv2.resize(image, (width, height))
-    im = np.array(image)
-
-    return im
-
-
-def render_image(img_string, config):
+def render_image(img_string, frame_rate):
     _time = time.time()
     sys.stdout.write("\033[H")
     sys.stdout.write("\r" + img_string)
     sys.stdout.flush
 
-    while time.time() - _time < config["delay"]:
+    while time.time() - _time < (1 / frame_rate):
         pass
 
 
-def prep_image(image_id, config, width, height):
-    return build_image(get_image(image_id, config, width, height))
+def resize_image(frame, width, height):
+    image = cv2.resize(frame, (width, height))
+    return image
 
 
-def main(name):
-    with open("config.json") as f:
-        main_config = json.load(f)
+def get_frames(vid_path):
+    global vr, finish_loading
+    vr = VideoReader(vid_path)
+    finish_loading.set()
 
-    with open(main_config[name]) as f:
-        config = json.load(f)
 
-    no_frames = config["frames"]
+def loading_screen():
+    global finish_loading
+    while not finish_loading.is_set():
+        for character in "\\-/|":
+            sys.stdout.write("\r" + character + " Loading...")
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+
+def main(vid_path):
+    global finish_loading
+    finish_loading = threading.Event()
+
+    get_frame_thread = threading.Thread(target=get_frames, args=(vid_path,))
+    loading_animation_thread = threading.Thread(target=loading_screen)
+
+    get_frame_thread.start()
+    loading_animation_thread.start()
+
+    get_frame_thread.join()
+    loading_animation_thread.join()
+
+    global vr
+    frame_rate = vr.get_avg_fps()
 
     width, height = get_terminal_size()
 
-    clear()
+    for frame in range(vr._num_frame + 1):
+        render_image(
+            build_image(resize_image(vr[frame].asnumpy(), width, height - 1)),
+            frame_rate,
+        )
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as exe:
-        for result in exe.map(
-            prep_image,
-            [i for i in range(0, no_frames + 1)],
-            repeat(config),
-            repeat(width),
-            repeat(height - 1),
-        ):
-            render_image(result, config)
-
-    print(f" ----- {config['name']} ----- ")
+    print(" ----- End ----- ")
 
 
 if __name__ == "__main__":
-    name = sys.argv[1]
-    main(name)
+    vid_path = sys.argv[1]
+    assert os.path.exists(vid_path)
+    clear()
+    main(vid_path)
