@@ -1,5 +1,3 @@
-#!venv/bin/python
-
 import cv2, sys, json, os
 
 

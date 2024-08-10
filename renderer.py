@@ -1,5 +1,3 @@
-#!venv/bin/python
-
 import cv2, sys, time, os, json, concurrent.futures
 import numpy as np
 from itertools import repeat
