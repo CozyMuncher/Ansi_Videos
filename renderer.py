@@ -1,4 +1,4 @@
-import cv2, sys, time, os, threading
+import cv2, sys, time, os, threading, math
 from os import get_terminal_size
 from decord import VideoReader
 
@@ -31,9 +31,12 @@ def resize_image(frame, width, height):
     return image
 
 
-def get_frames(vid_path):
+def get_frames(vid_path, vr_split):
     global vr, finish_loading
     vr = VideoReader(vid_path)
+    total_instances = math.ceil(vr._num_frame/vr_split)
+    del vr
+    vr = [VideoReader(vid_path) for i in range(total_instances)]
     finish_loading.set()
 
 
@@ -45,13 +48,13 @@ def loading_screen():
             sys.stdout.flush()
             time.sleep(0.1)
 
-
 def main(vid_path):
     try:
-        global finish_loading
+        global finish_loading, vr_split
+
         finish_loading = threading.Event()
 
-        get_frame_thread = threading.Thread(target=lambda: get_frames(vid_path))
+        get_frame_thread = threading.Thread(target=lambda: get_frames(vid_path, vr_split))
         loading_animation_thread = threading.Thread(target=loading_screen)
 
         get_frame_thread.start()
@@ -61,25 +64,30 @@ def main(vid_path):
         loading_animation_thread.join()
 
         global vr
-        frame_rate = vr.get_avg_fps()
+        frame_rate = vr[0].get_avg_fps()
 
         width, height = get_terminal_size()
 
-        for frame in range(vr._num_frame):
+        for frame in range(vr[0]._num_frame):
+            if frame % vr_split == 0 and frame != 0:
+                vr.pop(0)
             render_image(
-                build_image(resize_image(vr[frame].asnumpy(), width, height - 1)),
+                build_image(resize_image(vr[0][frame].asnumpy(), width, height - 1)),
                 frame_rate,
             )
 
         print(" ----- End ----- ")
     except Exception as e:
-        clear()
+        
         print("\x1b[0m\n")
         print(e)
 
 
 if __name__ == "__main__":
+    global vr_split
     vid_path = sys.argv[1]
+    try: vr_split = sys.argv[2]
+    except: vr_split = 200
     assert os.path.exists(vid_path)
     clear()
     main(vid_path)
