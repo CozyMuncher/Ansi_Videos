@@ -1,5 +1,6 @@
 import cv2, sys, time, os, threading, math
 from os import get_terminal_size
+from datetime import timedelta
 from decord import VideoReader
 
 clear = lambda: os.system("clear")
@@ -50,7 +51,7 @@ def loading_screen():
 
 def main(vid_path):
     try:
-        global finish_loading, vr_split
+        global finish_loading, vr_split, vr
 
         finish_loading = threading.Event()
 
@@ -63,12 +64,14 @@ def main(vid_path):
         get_frame_thread.join()
         loading_animation_thread.join()
 
-        global vr
         frame_rate = vr[0].get_avg_fps()
+        no_frames = vr[0]._num_frame
 
         width, height = get_terminal_size()
 
-        for frame in range(vr[0]._num_frame):
+        start_time = time.time()
+
+        for frame in range(no_frames):
             if frame % vr_split == 0 and frame != 0:
                 vr.pop(0)
             render_image(
@@ -77,6 +80,8 @@ def main(vid_path):
             )
 
         print(" ----- End ----- ")
+        print(f"Total Elasped Time: {str(timedelta(seconds=time.time() - start_time))}")
+        print(f"Expected Time: {timedelta(seconds=1/frame_rate*no_frames)}")
     except Exception as e:
         
         print("\x1b[0m\n")
@@ -86,8 +91,8 @@ def main(vid_path):
 if __name__ == "__main__":
     global vr_split
     vid_path = sys.argv[1]
-    try: vr_split = sys.argv[2]
-    except: vr_split = 200
+    try: vr_split = int(sys.argv[2])
+    except: vr_split = 100
     assert os.path.exists(vid_path)
     clear()
     main(vid_path)
